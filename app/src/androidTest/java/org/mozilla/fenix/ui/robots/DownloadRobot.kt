@@ -8,6 +8,7 @@ package org.mozilla.fenix.ui.robots
 
 import android.content.Intent
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.ViewInteraction
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers
@@ -15,11 +16,13 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import org.hamcrest.CoreMatchers
+import org.hamcrest.core.StringContains.containsString
 import org.mozilla.fenix.R
 import org.mozilla.fenix.helpers.TestAssetHelper
 import org.mozilla.fenix.helpers.TestHelper
@@ -38,6 +41,23 @@ class DownloadRobot {
     fun verifyDownloadNotificationPopup() = assertDownloadNotificationPopup()
 
     fun verifyPhotosAppOpens() = assertPhotosOpens()
+
+    fun verifyDownloadedFileName(fileName: String): ViewInteraction =
+        downloadedFile(fileName).check(matches(isDisplayed()))
+
+    fun verifyEmptyDownloadsList(): ViewInteraction =
+        onView(withText("No downloaded files")).check(matches(isDisplayed()))
+
+    fun tapToOpenFile(fileName: String, type: String) {
+        downloadedFile(fileName).click()
+        // verify open intent is matched with associated data type
+        Intents.intended(
+            CoreMatchers.allOf(
+                IntentMatchers.hasAction(Intent.ACTION_VIEW),
+                IntentMatchers.hasType(containsString(type))
+            )
+        )
+    }
 
     class Transition {
 
@@ -84,6 +104,13 @@ class DownloadRobot {
             DownloadRobot().interact()
             return Transition()
         }
+
+        fun exitDownloadsManagerToBrowser(interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            onView(withContentDescription("Navigate up")).click()
+
+            BrowserRobot().interact()
+            return BrowserRobot.Transition()
+        }
     }
 }
 
@@ -125,3 +152,5 @@ private fun assertPhotosOpens() {
         )
     }
 }
+
+private fun downloadedFile(fileName: String) = onView(withText(fileName))

@@ -4,11 +4,14 @@
 
 package org.mozilla.fenix.ui
 
+import android.os.Environment
 import android.view.View
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.espresso.IdlingRegistry
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import androidx.test.uiautomator.UiDevice
+import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
@@ -17,6 +20,7 @@ import org.junit.Test
 import org.mozilla.fenix.R
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.helpers.AndroidAssetDispatcher
+import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
 import org.mozilla.fenix.helpers.HomeActivityTestRule
 import org.mozilla.fenix.helpers.RecyclerViewIdlingResource
 import org.mozilla.fenix.helpers.TestAssetHelper
@@ -24,9 +28,11 @@ import org.mozilla.fenix.helpers.TestHelper
 import org.mozilla.fenix.helpers.ViewVisibilityIdlingResource
 import org.mozilla.fenix.ui.robots.browserScreen
 import org.mozilla.fenix.ui.robots.clickUrlbar
+import org.mozilla.fenix.ui.robots.downloadRobot
 import org.mozilla.fenix.ui.robots.enhancedTrackingProtection
 import org.mozilla.fenix.ui.robots.homeScreen
 import org.mozilla.fenix.ui.robots.navigationToolbar
+import java.io.File
 
 /**
  * Test Suite that contains tests defined as part of the Smoke and Sanity check defined in Test rail.
@@ -49,8 +55,28 @@ class SmokeTest {
         return searchDialogFragment?.view?.findViewById(R.id.awesome_bar)
     }
 
+    //Remove test file from the Downloads folder
+    @Suppress("Deprecation")
+    fun deleteDownloadFromStorage(){
+        runBlocking {
+            val downloadedFile = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "Globe.svg"
+            )
+
+            if (downloadedFile.exists()) {
+                downloadedFile.delete()
+            }
+        }
+    }
+
     @get:Rule
     val activityTestRule = HomeActivityTestRule()
+    @get:Rule
+    var mGrantPermissions = GrantPermissionRule.grant(
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    )
 
     @Before
     fun setUp() {
@@ -566,6 +592,43 @@ class SmokeTest {
         }.openThreeDotMenu {
         }.openReportSiteIssue {
             verifyUrl("webcompat.com/issues/new")
+        }
+    }
+
+    @Before
+    fun launchIntentsActivity(){
+        activityTestRule.finishActivity()
+        val activityIntentTestRule = HomeActivityIntentTestRule()
+        activityIntentTestRule.launchActivity(null)
+    }
+    @Test
+    fun verifyDownloadInDownloadsManagerTest() {
+        val downloadWebPage = TestAssetHelper.getDownloadAsset(mockWebServer)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(downloadWebPage.url) {
+            mDevice.waitForIdle()
+        }
+
+        downloadRobot {
+            verifyDownloadPrompt()
+        }.clickDownload {
+            mDevice.waitForIdle()
+            verifyDownloadNotificationPopup()
+        }
+
+        browserScreen {
+        }.openThreeDotMenu {
+        }.openDownloadsManager {
+            verifyDownloadedFileName("Globe.svg")
+            tapToOpenFile("Globe.svg", "image")
+            verifyPhotosAppOpens()
+            deleteDownloadFromStorage()
+            mDevice.pressBack()
+        }.exitDownloadsManagerToBrowser {
+        }.openThreeDotMenu {
+        }.openDownloadsManager {
+            verifyEmptyDownloadsList()
         }
     }
 }
